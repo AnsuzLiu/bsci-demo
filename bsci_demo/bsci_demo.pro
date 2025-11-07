@@ -22,16 +22,26 @@ DEFINES += QT_DEPRECATED_WARNINGS
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
+INCLUDEPATH += $$PWD/../include/ \
+INCLUDEPATH += /usr/src/jetson_multimedia_api/include/ \
+INCLUDEPATH += /usr/local/cuda/include/
+
+QMAKE_LFLAGS += '-Wl,-rpath-link,../lib'
+
+LIBS += -L"../lib/" -lqcap \
+
 
 SOURCES += \
         main.cpp \
         mainwindow.cpp \
+    processinference.cpp \
     setpassworddialog.cpp \
     logindialog.cpp \
     aspectratioframe.cpp
 
 HEADERS += \
         mainwindow.h \
+    processinference.h \
     setpassworddialog.h \
     logindialog.h \
     aspectratioframe.h
@@ -41,10 +51,5 @@ FORMS += \
     setpassworddialog.ui \
     logindialog.ui
 
-INCLUDEPATH +=\
-              $$PWD/../include/
 
-QMAKE_LFLAGS += '-Wl,-rpath-link,../lib'
-
-LIBS += -L"../lib/" -lqcap \
 

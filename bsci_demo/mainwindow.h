@@ -11,6 +11,8 @@
 
 #include <qcap.h>
 #include <qcap.linux.h>
+#include <qcap.common.h>
+#include <processinference.h>
 
 struct SourceParam {
 
@@ -98,6 +100,8 @@ public:
     QMap< QString, ULONG >  m_qMapVideoInput;
 
     QMap< QString, ULONG >  m_qMapAudioInput;
+
+
 
 
 private slots:

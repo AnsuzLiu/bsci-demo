@@ -267,6 +267,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->setupUi(this);
 
+    processinference *inf = new processinference();
+    processinference *inf_ui = new processinference(ui->Frame_CropBMP);
+
     g_pMain = this;
 
     ////// Check Output Folder
