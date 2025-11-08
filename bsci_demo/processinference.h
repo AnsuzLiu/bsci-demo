@@ -133,10 +133,10 @@ class processinference
 {
 
 public:
-    processinference();
     processinference(QFrame *frame);
+    ~processinference();
     QRETURN OnStart(free_stack_t& _FreeStack_, QRESULT& qres);
-    QRESULT OnStartTimer(free_stack_t& _FreeStack_, qcap2_event_handlers_t* pEventHandlers, qcap2_video_scaler_t* pVsca);
+    QRESULT OnStartTimer(free_stack_t& _FreeStack_, qcap2_event_handlers_t* pEventHandlers, qcap2_video_scaler_t* pVsca, qcap2_rcbuffer_t* pVsrc);
     QRESULT NewEvent(free_stack_t& _FreeStack_, qcap2_event_t** ppEvent);
 
     QRESULT StartEventHandlers();
@@ -145,7 +145,7 @@ public:
     template<class FUNC>
     QRESULT AddTimerHandler(free_stack_t& _FreeStack_, qcap2_event_handlers_t* pEventHandlers, qcap2_timer_t* pTimer, FUNC func);
     QRESULT ExecInEventHandlers(std::function<QRETURN ()> cb);
-    void sourceRGB(free_stack_t& _FreeStack_, qcap2_video_scaler_t** ppVsca);
+    void sourceRGB(free_stack_t& _FreeStack_, qcap2_rcbuffer_t** ppRCBuffer);
     QRESULT StartVscaInferI420(free_stack_t& _FreeStack_, qcap2_video_scaler_t** ppVsca, qcap2_event_t* pEvent);
     QRESULT StartVscaInferVsink(free_stack_t& _FreeStack_, ULONG nColorSpaceType, ULONG nVideoFrameWidth, ULONG nVideoFrameHeight, qcap2_video_sink_t** ppVsink);
     QRESULT new_video_cudahostbuf(free_stack_t& _FreeStack_, ULONG nColorSpaceType, ULONG nWidth, ULONG nHeight, unsigned int nFlags, qcap2_rcbuffer_t** ppRCBuffer);

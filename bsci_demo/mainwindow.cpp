@@ -267,8 +267,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->setupUi(this);
 
-    processinference *inf = new processinference();
-    processinference *inf_ui = new processinference(ui->Frame_CropBMP);
+    m_infer = new processinference(ui->Frame_CropBMP);
 
     g_pMain = this;
 
@@ -287,7 +286,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     m_stFunc_Device.st_pDiskUsageTimer = new QTimer( this );
 
-    connect( m_stFunc_Device.st_pDiskUsageTimer, &QTimer::timeout, this, &MainWindow::Func_Live_Snapshot );
+//    connect( m_stFunc_Device.st_pDiskUsageTimer, &QTimer::timeout, this, &MainWindow::Func_Live_Snapshot );
 
     m_stFunc_Device.st_pDiskUsageTimer->start( 2000 );
 
@@ -483,6 +482,10 @@ void MainWindow::HwUninitialize()
 
 MainWindow::~MainWindow()
 {
+    if (m_infer) {
+        delete m_infer;
+        m_infer = nullptr;
+    }
 
     HwUninitialize();
 
@@ -666,7 +669,7 @@ void MainWindow::Func_Live_Snapshot()
 
     QString qszFilePath = m_qszOutputPath + QDateTime::currentDateTime().toString( Qt::ISODateWithMs ) + QString( ".bmp" );
 
-    QCAP_SNAPSHOT_SHARE_RECORD_BMP( nShareRecordIndex,qszFilePath.toLocal8Bit().data(), TRUE );
+//    QCAP_SNAPSHOT_SHARE_RECORD_BMP( nShareRecordIndex,qszFilePath.toLocal8Bit().data(), TRUE );
 
 }
 

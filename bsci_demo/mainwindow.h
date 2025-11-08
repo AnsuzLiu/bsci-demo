@@ -14,6 +14,8 @@
 #include <qcap.common.h>
 #include <processinference.h>
 
+class processinference;
+
 struct SourceParam {
 
     ULONG   st_nVideoColorSpaceType     = QCAP_COLORSPACE_TYPE_NV12;
@@ -108,7 +110,10 @@ private slots:
     void on_btn_changepassword_clicked();
 
 private:
+
     Ui::MainWindow *ui;
+    processinference* m_infer = nullptr;   // 加這一行成員
+
 };
 
 #endif // MAINWINDOW_H
