@@ -26,7 +26,7 @@ static QRETURN OnEvent_infer_sca(qcap2_video_scaler_t* pVsca, qcap2_video_sink_t
     return qret;
 }
 
-static QRETURN OnEvent_Timer(qcap2_timer_t* pTimer, tick_ctrl_t* pTickCtrl, qcap2_video_scaler_t* pVsca, qcap2_rcbuffer_t* pVsrc) {
+static QRETURN OnEvent_Timer(qcap2_timer_t* pTimer, __testkit__::tick_ctrl_t* pTickCtrl, qcap2_video_scaler_t* pVsca, qcap2_rcbuffer_t* pVsrc) {
     QRESULT qres;
 
     int64_t now = _clk();
@@ -44,17 +44,17 @@ static QRETURN OnEvent_Timer(qcap2_timer_t* pTimer, tick_ctrl_t* pTickCtrl, qcap
     }
 
     if(pVsca) {
-//        qcap2_print_video_frame_info(pVsrc, "vvv");
+        qcap2_print_video_frame_info(pVsrc, "vvv");
         qres = qcap2_video_scaler_push(pVsca, pVsrc);
     }
 
     return QCAP_RT_OK;
 }
 
-QRESULT processinference::OnStartTimer(free_stack_t& _FreeStack_, qcap2_event_handlers_t* pEventHandlers, qcap2_video_scaler_t* pVsca, qcap2_rcbuffer_t* pVsrc) {
+QRESULT processinference::OnStartTimer(__testkit__::free_stack_t& _FreeStack_, qcap2_event_handlers_t* pEventHandlers, qcap2_video_scaler_t* pVsca, qcap2_rcbuffer_t* pVsrc) {
     QRESULT qres = QCAP_RS_SUCCESSFUL;
 
-    tick_ctrl_t* pTickCtrl = new tick_ctrl_t();
+    __testkit__::tick_ctrl_t* pTickCtrl = new __testkit__::tick_ctrl_t();
     _FreeStack_ += [pTickCtrl]() {
         delete pTickCtrl;
     };
@@ -88,174 +88,182 @@ QRESULT processinference::OnStartTimer(free_stack_t& _FreeStack_, qcap2_event_ha
         return QCAP_RS_ERROR_GENERAL;
     }
 
-    AddTimerHandler(_FreeStack_, pEventHandlers, pTimer, std::bind(&OnEvent_Timer, pTimer, pTickCtrl, pVsca, pVsrc));
+    __testkit__::AddTimerHandler(_FreeStack_, pEventHandlers, pTimer, std::bind(&OnEvent_Timer, pTimer, pTickCtrl, pVsca, pVsrc));
 
     return qres;
 }
 
-QRESULT processinference::NewEvent(free_stack_t& _FreeStack_, qcap2_event_t** ppEvent) {
-    QRESULT qres = QCAP_RS_SUCCESSFUL;
+//QRESULT processinference::NewEvent(free_stack_t& _FreeStack_, qcap2_event_t** ppEvent) {
+//    QRESULT qres = QCAP_RS_SUCCESSFUL;
 
-    switch(1) { case 1:
-        qcap2_event_t* pEvent = qcap2_event_new();
-        _FreeStack_ += [pEvent]() {
-            qcap2_event_delete(pEvent);
-        };
+//    switch(1) { case 1:
+//        qcap2_event_t* pEvent = qcap2_event_new();
+//        _FreeStack_ += [pEvent]() {
+//            qcap2_event_delete(pEvent);
+//        };
 
-        qres = qcap2_event_start(pEvent);
-        if(qres != QCAP_RS_SUCCESSFUL) {
-            LOGE("%s(%d): qcap2_event_start() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
-            break;
-        }
-        _FreeStack_ += [pEvent]() {
-            QRESULT qres;
+//        qres = qcap2_event_start(pEvent);
+//        if(qres != QCAP_RS_SUCCESSFUL) {
+//            LOGE("%s(%d): qcap2_event_start() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
+//            break;
+//        }
+//        _FreeStack_ += [pEvent]() {
+//            QRESULT qres;
 
-            qres = qcap2_event_stop(pEvent);
-            if(qres != QCAP_RS_SUCCESSFUL) {
-                LOGE("%s(%d): qcap2_event_stop() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
-            }
-        };
+//            qres = qcap2_event_stop(pEvent);
+//            if(qres != QCAP_RS_SUCCESSFUL) {
+//                LOGE("%s(%d): qcap2_event_stop() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
+//            }
+//        };
 
-        *ppEvent = pEvent;
-    }
+//        *ppEvent = pEvent;
+//    }
 
-    return qres;
-}
+//    return qres;
+//}
 
-template<class FUNC>
-QRESULT processinference::AddEventHandler(free_stack_t& _FreeStack_, qcap2_event_handlers_t* pEventHandlers, qcap2_event_t* pEvent, FUNC func) {
-    QRESULT qres = QCAP_RS_SUCCESSFUL;
+//template<class FUNC>
+//QRESULT processinference::AddEventHandler(free_stack_t& _FreeStack_, qcap2_event_handlers_t* pEventHandlers, qcap2_event_t* pEvent, FUNC func) {
+//    QRESULT qres = QCAP_RS_SUCCESSFUL;
 
-    switch(1) { case 1:
-        uintptr_t nHandle;
-        qres = qcap2_event_get_native_handle(pEvent, &nHandle);
-        if(qres != QCAP_RS_SUCCESSFUL) {
-            LOGE("%s(%d): qcap2_event_get_native_handle() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
-            break;
-        }
+//    switch(1) { case 1:
+//        uintptr_t nHandle;
+//        qres = qcap2_event_get_native_handle(pEvent, &nHandle);
+//        if(qres != QCAP_RS_SUCCESSFUL) {
+//            LOGE("%s(%d): qcap2_event_get_native_handle() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
+//            break;
+//        }
 
-        callback_t* pCallback = new callback_t(func);
-        _FreeStack_ += [pCallback]() {
-            delete pCallback;
-        };
+//        callback_t* pCallback = new callback_t(func);
+//        _FreeStack_ += [pCallback]() {
+//            delete pCallback;
+//        };
 
-        qres = qcap2_event_handlers_add_handler(pEventHandlers, nHandle,
-            callback_t::_func, pCallback);
-        if(qres != QCAP_RS_SUCCESSFUL) {
-            LOGE("%s(%d): qcap2_event_handlers_add_handler() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
-            break;
-        }
-        _FreeStack_ += [pEventHandlers, nHandle]() {
-            QRESULT qres;
+//        qres = qcap2_event_handlers_add_handler(pEventHandlers, nHandle,
+//            callback_t::_func, pCallback);
+//        if(qres != QCAP_RS_SUCCESSFUL) {
+//            LOGE("%s(%d): qcap2_event_handlers_add_handler() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
+//            break;
+//        }
+//        _FreeStack_ += [pEventHandlers, nHandle]() {
+//            QRESULT qres;
 
-            qres = qcap2_event_handlers_remove_handler(pEventHandlers, nHandle);
-            if(qres != QCAP_RS_SUCCESSFUL) {
-                LOGE("%s(%d): qcap2_event_handlers_remove_handler() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
-            }
-        };
-    }
+//            qres = qcap2_event_handlers_remove_handler(pEventHandlers, nHandle);
+//            if(qres != QCAP_RS_SUCCESSFUL) {
+//                LOGE("%s(%d): qcap2_event_handlers_remove_handler() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
+//            }
+//        };
+//    }
 
-    return qres;
-}
+//    return qres;
+//}
 
-template<class FUNC>
-QRESULT processinference::AddTimerHandler(free_stack_t& _FreeStack_, qcap2_event_handlers_t* pEventHandlers, qcap2_timer_t* pTimer, FUNC func) {
-    QRESULT qres = QCAP_RS_SUCCESSFUL;
+//template<class FUNC>
+//QRESULT processinference::AddTimerHandler(free_stack_t& _FreeStack_, qcap2_event_handlers_t* pEventHandlers, qcap2_timer_t* pTimer, FUNC func) {
+//    QRESULT qres = QCAP_RS_SUCCESSFUL;
 
-    switch(1) { case 1:
-        uintptr_t nHandle;
-        qres = qcap2_timer_get_native_handle(pTimer, &nHandle);
-        if(qres != QCAP_RS_SUCCESSFUL) {
-            LOGE("%s(%d): qcap2_timer_get_native_handle() failed, qres=%d", __FUNCTION__, __LINE__, qres);
-            break;
-        }
+//    switch(1) { case 1:
+//        uintptr_t nHandle;
+//        qres = qcap2_timer_get_native_handle(pTimer, &nHandle);
+//        if(qres != QCAP_RS_SUCCESSFUL) {
+//            LOGE("%s(%d): qcap2_timer_get_native_handle() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+//            break;
+//        }
 
-        callback_t* pCallback = new callback_t(func);
-        _FreeStack_ += [pCallback]() {
-            delete pCallback;
-        };
+//        callback_t* pCallback = new callback_t(func);
+//        _FreeStack_ += [pCallback]() {
+//            delete pCallback;
+//        };
 
-        qres = qcap2_event_handlers_add_handler(pEventHandlers, nHandle,
-            callback_t::_func, pCallback);
-        if(qres != QCAP_RS_SUCCESSFUL) {
-            LOGE("%s(%d): qcap2_event_handlers_add_handler() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
-            break;
-        }
-        _FreeStack_ += [pEventHandlers, nHandle]() {
-            QRESULT qres;
+//        qres = qcap2_event_handlers_add_handler(pEventHandlers, nHandle,
+//            callback_t::_func, pCallback);
+//        if(qres != QCAP_RS_SUCCESSFUL) {
+//            LOGE("%s(%d): qcap2_event_handlers_add_handler() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
+//            break;
+//        }
+//        _FreeStack_ += [pEventHandlers, nHandle]() {
+//            QRESULT qres;
 
-            qres = qcap2_event_handlers_remove_handler(pEventHandlers, nHandle);
-            if(qres != QCAP_RS_SUCCESSFUL) {
-                LOGE("%s(%d): qcap2_event_handlers_remove_handler() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
-            }
-        };
-    }
+//            qres = qcap2_event_handlers_remove_handler(pEventHandlers, nHandle);
+//            if(qres != QCAP_RS_SUCCESSFUL) {
+//                LOGE("%s(%d): qcap2_event_handlers_remove_handler() failed, qres=%d",  __FUNCTION__, __LINE__, qres);
+//            }
+//        };
+//    }
 
-    return qres;
-}
+//    return qres;
+//}
 
-QRESULT processinference::StartEventHandlers() {
+QRESULT processinference::StartEventHandlers_() {
     QRESULT qres = QCAP_RS_SUCCESSFUL;
 
     switch(1) { case 1:
         mEventHandlers = qcap2_event_handlers_new();
+        if (!mEventHandlers) {
+            LOGE("%s(%d): qcap2_event_handlers_new() failed", __FUNCTION__, __LINE__);
+            return QCAP_RS_ERROR_GENERAL;
+        }
+
+        pEventHandlers = mEventHandlers;
 
         qres = qcap2_event_handlers_start(mEventHandlers);
         if(qres != QCAP_RS_SUCCESSFUL) {
-            printf("qcap2_event_handlers_start() failed, qres=%d \n", qres);
+            LOGE("%s(%d): qcap2_event_handlers_start() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+            mEventHandlers = nullptr;
+            pEventHandlers = nullptr;
             break;
         }
     }
     return qres;
 }
 
-QRESULT processinference::ExecInEventHandlers(std::function<QRETURN ()> cb) {
-    QRESULT qres = QCAP_RS_SUCCESSFUL;
+//QRESULT processinference::ExecInEventHandlers(std::function<QRETURN ()> cb) {
+//    QRESULT qres = QCAP_RS_SUCCESSFUL;
 
-    switch(1) { case 1:
-        std::shared_ptr<callback_t> pCallback(new callback_t(cb));
+//    switch(1) { case 1:
+//        std::shared_ptr<callback_t> pCallback(new callback_t(cb));
 
-        printf("+qcap2_event_handlers_invoke() \n");
-        qres = qcap2_event_handlers_invoke(mEventHandlers,
-            callback_t::_func, pCallback.get());
-        if(qres != QCAP_RS_SUCCESSFUL) {
-            printf("%s(%d): qcap2_event_handlers_invoke() failed, qres=%d \n", __FUNCTION__, __LINE__, qres);
-            break;
-        }
-        printf("-qcap2_event_handlers_invoke() \n");
-    }
-    return qres;
-}
+//        printf("+qcap2_event_handlers_invoke() \n");
+//        qres = qcap2_event_handlers_invoke(mEventHandlers,
+//            callback_t::_func, pCallback.get());
+//        if(qres != QCAP_RS_SUCCESSFUL) {
+//            printf("%s(%d): qcap2_event_handlers_invoke() failed, qres=%d \n", __FUNCTION__, __LINE__, qres);
+//            break;
+//        }
+//        printf("-qcap2_event_handlers_invoke() \n");
+//    }
+//    return qres;
+//}
 
-QRESULT processinference::new_video_cudahostbuf(free_stack_t& _FreeStack_, ULONG nColorSpaceType, ULONG nWidth, ULONG nHeight, unsigned int nFlags, qcap2_rcbuffer_t** ppRCBuffer) {
-        QRESULT qres = QCAP_RS_SUCCESSFUL;
+//QRESULT processinference::new_video_cudahostbuf(__testkit__::free_stack_t& _FreeStack_, ULONG nColorSpaceType, ULONG nWidth, ULONG nHeight, unsigned int nFlags, qcap2_rcbuffer_t** ppRCBuffer) {
+//        QRESULT qres = QCAP_RS_SUCCESSFUL;
 
-        switch(1) { case 1:
-            qcap2_rcbuffer_t* pRCBuffer = qcap2_rcbuffer_new_av_frame();
-            _FreeStack_ += [pRCBuffer]() {
-                qcap2_rcbuffer_delete(pRCBuffer);
-            };
+//        switch(1) { case 1:
+//            qcap2_rcbuffer_t* pRCBuffer = qcap2_rcbuffer_new_av_frame();
+//            _FreeStack_ += [pRCBuffer]() {
+//                qcap2_rcbuffer_delete(pRCBuffer);
+//            };
 
-            qcap2_av_frame_t* pAVFrame = (qcap2_av_frame_t*)qcap2_rcbuffer_get_data(pRCBuffer);
-            qcap2_av_frame_set_video_property(pAVFrame, nColorSpaceType, nWidth, nHeight);
+//            qcap2_av_frame_t* pAVFrame = (qcap2_av_frame_t*)qcap2_rcbuffer_get_data(pRCBuffer);
+//            qcap2_av_frame_set_video_property(pAVFrame, nColorSpaceType, nWidth, nHeight);
 
-            if(! qcap2_av_frame_alloc_cuda_host_buffer(pAVFrame, nFlags, 32, 1)) {
-                qres = QCAP_RS_ERROR_OUT_OF_MEMORY;
-                LOGE("%s(%d): qcap2_av_frame_alloc_cuda_host_buffer() failed", __FUNCTION__, __LINE__);
-                break;
-            }
-            _FreeStack_ += [pAVFrame]() {
-                qcap2_av_frame_free_cuda_host_buffer(pAVFrame);
-            };
+//            if(! qcap2_av_frame_alloc_cuda_host_buffer(pAVFrame, nFlags, 32, 1)) {
+//                qres = QCAP_RS_ERROR_OUT_OF_MEMORY;
+//                LOGE("%s(%d): qcap2_av_frame_alloc_cuda_host_buffer() failed", __FUNCTION__, __LINE__);
+//                break;
+//            }
+//            _FreeStack_ += [pAVFrame]() {
+//                qcap2_av_frame_free_cuda_host_buffer(pAVFrame);
+//            };
 
-            *ppRCBuffer = pRCBuffer;
-        }
+//            *ppRCBuffer = pRCBuffer;
+//        }
 
-        return qres;
-    }
+//        return qres;
+//    }
 
 
-void processinference::sourceRGB(free_stack_t& _FreeStack_, qcap2_rcbuffer_t** ppRCBuffer) {
+void processinference::sourceRGB(__testkit__::free_stack_t& _FreeStack_, qcap2_rcbuffer_t** ppRCBuffer) {
     QRESULT qres;
     qcap2_rcbuffer_t* pRCBuffer;
     qres = new_video_cudahostbuf(_FreeStack_, QCAP_COLORSPACE_TYPE_GBRP, 560, 560, cudaHostAllocMapped, &pRCBuffer);
@@ -272,7 +280,7 @@ void processinference::sourceRGB(free_stack_t& _FreeStack_, qcap2_rcbuffer_t** p
     *ppRCBuffer = pRCBuffer;
 }
 
-QRESULT processinference::StartVscaInferI420(free_stack_t& _FreeStack_, qcap2_video_scaler_t** ppVsca, qcap2_event_t *pEvent) {
+QRESULT processinference::StartVscaInferI420(__testkit__::free_stack_t& _FreeStack_, qcap2_video_scaler_t** ppVsca, qcap2_event_t *pEvent) {
     QRESULT qres = QCAP_RS_SUCCESSFUL;
 
     switch(1) { case 1:
@@ -340,7 +348,7 @@ QRESULT processinference::StartVscaInferI420(free_stack_t& _FreeStack_, qcap2_vi
     return qres;
 }
 
-QRESULT processinference::StartVscaInferVsink(free_stack_t& _FreeStack_, ULONG nColorSpaceType, ULONG nVideoFrameWidth, ULONG nVideoFrameHeight, qcap2_video_sink_t** ppVsink) {
+QRESULT processinference::StartVscaInferVsink(__testkit__::free_stack_t& _FreeStack_, ULONG nColorSpaceType, ULONG nVideoFrameWidth, ULONG nVideoFrameHeight, qcap2_video_sink_t** ppVsink) {
     QRESULT qres = QCAP_RS_SUCCESSFUL;
 
     switch(1) { case 1:
@@ -385,32 +393,41 @@ QRESULT processinference::StartVscaInferVsink(free_stack_t& _FreeStack_, ULONG n
     return qres;
 }
 
-QRETURN processinference::OnStart(free_stack_t& _FreeStack_, QRESULT& qres) {
-    NewEvent(mFreeStack, &pEvent_infer_sca);
+QRETURN processinference::OnStart(__testkit__::free_stack_t& _FreeStack_, QRESULT& qres) {
+    __testkit__::NewEvent(mFreeStack, &pEvent_infer_sca);
     qres = StartVscaInferI420(_FreeStack_, &pVsca_infer_i420, pEvent_infer_sca);
     if(qres != QCAP_RS_SUCCESSFUL) {
         LOGE("%s(%d): StartVsca() failed, qres=%d", __FUNCTION__, __LINE__, qres);
     }
     printf("pVsca_infer_i420 :%p \n", pVsca_infer_i420);
     StartVscaInferVsink(_FreeStack_, QCAP_COLORSPACE_TYPE_I420, 560, 560, &pVsink_infer);
-    AddEventHandler(mFreeStack, mEventHandlers, pEvent_infer_sca, std::bind(&OnEvent_infer_sca, pVsca_infer_i420, pVsink_infer, this));
+    qres = __testkit__::AddEventHandler(mFreeStack, mEventHandlers, pEvent_infer_sca, std::bind(&OnEvent_infer_sca, pVsca_infer_i420, pVsink_infer, this));
     if(qres != QCAP_RS_SUCCESSFUL) {
-        LOGE("%s[%d]OnStartTimer Failed", __FUNCTION__, __LINE__);
+        LOGE("%s[%d]AddEventHandler Failed", __FUNCTION__, __LINE__);
         return QCAP_RT_FAIL;
     }
     qcap2_rcbuffer_t* pRCBuffer_src;
     sourceRGB(_FreeStack_, &pRCBuffer_src);
     qres = OnStartTimer(_FreeStack_, mEventHandlers, pVsca_infer_i420, pRCBuffer_src);
+    if(qres != QCAP_RS_SUCCESSFUL) {
+        LOGE("%s[%d]OnStartTimer Failed", __FUNCTION__, __LINE__);
+        return QCAP_RT_FAIL;
+    }
 
     return QCAP_RT_OK;
 }
 
 processinference::processinference(QFrame *frame)
     : m_frame(frame) {
-    StartEventHandlers();
+    QRESULT qres = StartEventHandlers_();
+
+    if (qres != QCAP_RS_SUCCESSFUL) {
+        LOGE("%s(%d): StartEventHandlers_() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+        return;
+    }
 
     QRESULT qres_evt = QCAP_RS_SUCCESSFUL;
-    QRESULT qres = ExecInEventHandlers(std::bind(&processinference::OnStart, this, std::ref(mFreeStack), std::ref(qres_evt)));
+    qres = ExecInEventHandlers(std::bind(&processinference::OnStart, this, std::ref(mFreeStack), std::ref(qres_evt)));
 
     if(qres != QCAP_RS_SUCCESSFUL) {
         LOGE("%s(%d): ExecInEventHandlers() failed, qres=%d", __FUNCTION__, __LINE__, qres);
@@ -433,11 +450,12 @@ processinference::~processinference() {
     }
 
     QRESULT qres2 = qcap2_event_handlers_stop(mEventHandlers);
-    if (qres2 != QCAP_RS_SUCCESSFUL) {
-        LOGE("%s(%d): qcap2_event_handlers_stop() failed, qres=%d",
-             __FUNCTION__, __LINE__, qres2);
-    }
+        if (qres2 != QCAP_RS_SUCCESSFUL) {
+            LOGE("%s(%d): qcap2_event_handlers_stop() failed, qres=%d",
+                 __FUNCTION__, __LINE__, qres2);
+        }
 
-    qcap2_event_handlers_delete(mEventHandlers);
-    mEventHandlers = nullptr;
+        qcap2_event_handlers_delete(mEventHandlers);
+        mEventHandlers = nullptr;
+        pEventHandlers  = nullptr;
 }
