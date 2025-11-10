@@ -93,29 +93,6 @@ QRESULT processinference::OnStartTimer(__testkit__::free_stack_t& _FreeStack_, q
     return qres;
 }
 
-QRESULT processinference::StartEventHandlers_() {
-    QRESULT qres = QCAP_RS_SUCCESSFUL;
-
-    switch(1) { case 1:
-        mEventHandlers = qcap2_event_handlers_new();
-        if (!mEventHandlers) {
-            LOGE("%s(%d): qcap2_event_handlers_new() failed", __FUNCTION__, __LINE__);
-            return QCAP_RS_ERROR_GENERAL;
-        }
-
-        pEventHandlers = mEventHandlers;
-
-        qres = qcap2_event_handlers_start(mEventHandlers);
-        if(qres != QCAP_RS_SUCCESSFUL) {
-            LOGE("%s(%d): qcap2_event_handlers_start() failed, qres=%d", __FUNCTION__, __LINE__, qres);
-            mEventHandlers = nullptr;
-            pEventHandlers = nullptr;
-            break;
-        }
-    }
-    return qres;
-}
-
 void processinference::sourceRGB(__testkit__::free_stack_t& _FreeStack_, qcap2_rcbuffer_t** ppRCBuffer) {
     QRESULT qres;
     qcap2_rcbuffer_t* pRCBuffer;
@@ -254,14 +231,14 @@ QRETURN processinference::OnStart(__testkit__::free_stack_t& _FreeStack_, QRESUL
     }
     printf("pVsca_infer_i420 :%p \n", pVsca_infer_i420);
     StartVscaInferVsink(_FreeStack_, QCAP_COLORSPACE_TYPE_I420, 560, 560, &pVsink_infer);
-    qres = __testkit__::AddEventHandler(mFreeStack, mEventHandlers, pEvent_infer_sca, std::bind(&OnEvent_infer_sca, pVsca_infer_i420, pVsink_infer, this));
+    qres = __testkit__::AddEventHandler(mFreeStack, pEventHandlers, pEvent_infer_sca, std::bind(&OnEvent_infer_sca, pVsca_infer_i420, pVsink_infer, this));
     if(qres != QCAP_RS_SUCCESSFUL) {
         LOGE("%s[%d]AddEventHandler Failed", __FUNCTION__, __LINE__);
         return QCAP_RT_FAIL;
     }
     qcap2_rcbuffer_t* pRCBuffer_src;
     sourceRGB(_FreeStack_, &pRCBuffer_src);
-    qres = OnStartTimer(_FreeStack_, mEventHandlers, pVsca_infer_i420, pRCBuffer_src);
+    qres = OnStartTimer(_FreeStack_, pEventHandlers, pVsca_infer_i420, pRCBuffer_src);
     if(qres != QCAP_RS_SUCCESSFUL) {
         LOGE("%s[%d]OnStartTimer Failed", __FUNCTION__, __LINE__);
         return QCAP_RT_FAIL;
@@ -272,10 +249,10 @@ QRETURN processinference::OnStart(__testkit__::free_stack_t& _FreeStack_, QRESUL
 
 processinference::processinference(QFrame *frame)
     : m_frame(frame) {
-    QRESULT qres = StartEventHandlers_();
+    QRESULT qres = StartEventHandlers();
 
     if (qres != QCAP_RS_SUCCESSFUL) {
-        LOGE("%s(%d): StartEventHandlers_() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+        LOGE("%s(%d): StartEventHandlers() failed, qres=%d", __FUNCTION__, __LINE__, qres);
         return;
     }
 
@@ -288,7 +265,7 @@ processinference::processinference(QFrame *frame)
 }
 
 processinference::~processinference() {
-    if (!mEventHandlers) {
+    if (!pEventHandlers) {
         mFreeStack.flush();
         return;
     }
@@ -302,13 +279,12 @@ processinference::~processinference() {
         LOGE("%s(%d): ExecInEventHandlers(flush) failed, qres=%d",  __FUNCTION__, __LINE__, qres);
     }
 
-    QRESULT qres2 = qcap2_event_handlers_stop(mEventHandlers);
+    QRESULT qres2 = qcap2_event_handlers_stop(pEventHandlers);
         if (qres2 != QCAP_RS_SUCCESSFUL) {
             LOGE("%s(%d): qcap2_event_handlers_stop() failed, qres=%d",
                  __FUNCTION__, __LINE__, qres2);
         }
 
-        qcap2_event_handlers_delete(mEventHandlers);
-        mEventHandlers = nullptr;
+        qcap2_event_handlers_delete(pEventHandlers);
         pEventHandlers  = nullptr;
 }
