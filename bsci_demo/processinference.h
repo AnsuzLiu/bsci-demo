@@ -36,6 +36,8 @@
 #include <stdint.h>
 #include <QFrame>
 
+#define SNAPSHOT_ENABLE 1
+
 class processinference : public __testkit__::TestCase
 {
     public:

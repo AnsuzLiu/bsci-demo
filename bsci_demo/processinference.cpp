@@ -12,10 +12,37 @@ static QRETURN OnEvent_infer_sca(qcap2_video_scaler_t* pVsca, qcap2_video_sink_t
         return QCAP_RT_FAIL;
     }
 
+    std::shared_ptr<qcap2_av_frame_t> pAVFrame_i420(
+        (qcap2_av_frame_t*)qcap2_rcbuffer_lock_data(pRCBuffer_),
+        [pRCBuffer_](qcap2_av_frame_t*) {
+            qcap2_rcbuffer_unlock_data(pRCBuffer_);
+        });
+
     qres = qcap2_cuda_device_synchronize();
     if(qres != QCAP_RS_SUCCESSFUL) {
         LOGE("%s(%d): qcap2_cuda_device_synchronize() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+        return QCAP_RT_FAIL;
     }
+
+#if SNAPSHOT_ENABLE
+    switch(1) { case 1:
+        static int nIndex = 0;
+        const char* strBase = "/home/nvidia/images";
+        // const char* strBase = "images";
+        char fn[PATH_MAX];
+
+        if(nIndex > 30) break;
+
+        sprintf(fn, "%s/snapshot-%02d.jpg", strBase, nIndex);
+        if(nIndex++ >= 100) nIndex = 0;
+
+        qres = qcap2_av_frame_store_picture(pAVFrame_i420.get(), fn);
+        if(qres != QCAP_RS_SUCCESSFUL) {
+            LOGE("%s(%d): qcap2_av_frame_store_picture() failed, qres=%d", qres);
+            break;
+        }
+    }
+#endif
 
     qres = qcap2_video_sink_push(pVsink, pRCBuffer_);
     if(qres != QCAP_RS_SUCCESSFUL) {
@@ -44,7 +71,7 @@ static QRETURN OnEvent_Timer(qcap2_timer_t* pTimer, __testkit__::tick_ctrl_t* pT
     }
 
     if(pVsca) {
-        qcap2_print_video_frame_info(pVsrc, "vvv");
+//        qcap2_print_video_frame_info(pVsrc, "vvv");
         qres = qcap2_video_scaler_push(pVsca, pVsrc);
     }
 
