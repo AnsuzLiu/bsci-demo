@@ -22,13 +22,18 @@ DEFINES += QT_DEPRECATED_WARNINGS
 # You can also select to disable deprecated APIs only up to a certain version of Qt.
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
-INCLUDEPATH += $$PWD/../include/ \
-INCLUDEPATH += /usr/src/jetson_multimedia_api/include/ \
-INCLUDEPATH += /usr/local/cuda/include/
+INCLUDEPATH += \
+                $$PWD/../include/ \
+                /usr/src/jetson_multimedia_api/include \
+                /usr/local/cuda/include
 
 QMAKE_LFLAGS += '-Wl,-rpath-link,../lib'
 
-LIBS += -L"../lib/" -lqcap \
+LIBS += \
+        -L"../lib/" -lqcap \
+        -L/usr/lib/aarch64-linux-gnu/tegra \
+        -lnvbufsurface -lnvbufsurftransform \
+        -L/usr/local/cuda/lib64 -lcuda -lcudart
 
 
 SOURCES += \

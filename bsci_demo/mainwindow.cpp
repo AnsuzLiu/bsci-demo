@@ -214,8 +214,6 @@ QRETURN on_process_format_changed( PVOID pDevice, ULONG nVideoInput, ULONG nAudi
 
     printf( "[QCAP DEBUG] <CallBack> %s\n", qszSourceInfo );
 
-    g_pMain->Func_Live_Preview();
-
     return QCAP_RT_OK;
 
 }
@@ -226,16 +224,43 @@ QRETURN on_process_video_preview( PVOID pDevice, double dSampleTime, BYTE* pFram
 
     Q_UNUSED( pDevice );
 
+    Q_UNUSED( dSampleTime );
+
     ULONG nDeviceIndex = ( uintptr_t ) pUserData ;
 
-    if( g_pMain->m_stFunc_Device.st_bShareRecord_Live == TRUE && pFrameBuffer != 0 && nFrameBufferLen != 0  ) {
+    Q_UNUSED( nDeviceIndex );
 
-        QCAP_SET_VIDEO_SHARE_RECORD_UNCOMPRESSION_BUFFER( nDeviceIndex, g_pMain->m_stParam_Device.st_nVideoColorSpaceType
-                                                          , g_pMain->m_stParam_Device.st_nVideoWidth
-                                                          , g_pMain->m_stParam_Device.st_nVideoHeight
-                                                          , pFrameBuffer, nFrameBufferLen, dSampleTime );
+    if( g_pMain->m_stFunc_Device.st_bSinkState == TRUE
+            &&g_pMain->m_stFunc_Device.st_pSink != nullptr ) {
+
+        QRESULT QR = QCAP_RS_SUCCESSFUL;
+
+        qcap2_rcbuffer_t* pSrcRCBuffer = qcap2_rcbuffer_cast( pFrameBuffer, nFrameBufferLen );
+
+        std::shared_ptr<qcap2_rcbuffer_t> pDstRCBuffer = nullptr;
+
+        if( g_pMain->m_stFunc_Device.st_bSinkState == TRUE
+                &&g_pMain->m_stFunc_Device.st_pScaler != nullptr ) {
+
+            qcap2_video_scaler_push( g_pMain->m_stFunc_Device.st_pScaler, pSrcRCBuffer );
+
+            qcap2_rcbuffer_t * pTempBuffer = nullptr;
+
+            qcap2_video_scaler_pop( g_pMain->m_stFunc_Device.st_pScaler, &pTempBuffer );
+
+            pDstRCBuffer.reset( pTempBuffer, qcap2_rcbuffer_release );
+
+        } else {
+
+            pDstRCBuffer.reset( pSrcRCBuffer, qcap2_rcbuffer_release );
+
+        }
+
+        QR = qcap2_video_sink_push( g_pMain->m_stFunc_Device.st_pSink, pDstRCBuffer.get() );
+
+        if( QR != QCAP_RS_SUCCESSFUL ) printf("[QCAP DEBUG] %s(%d): qcap2_video_sink_push ( Video Preview callback ) Failed ( %d )!!! \n", __FUNCTION__, __LINE__, QR );
+
     }
-
 
     return QCAP_RT_OK;
 
@@ -247,15 +272,47 @@ QRETURN on_process_audio_preview( PVOID pDevice, double dSampleTime, BYTE* pFram
 
     Q_UNUSED( pDevice );
 
+    Q_UNUSED( dSampleTime );
+
+    Q_UNUSED( pFrameBuffer );
+
+    Q_UNUSED( nFrameBufferLen );
+
     ULONG nDeviceIndex = ( uintptr_t ) pUserData ;
 
-    if( g_pMain->m_stFunc_Device.st_bShareRecord_Live == TRUE && pFrameBuffer != 0 && nFrameBufferLen != 0  ) {
-
-        QCAP_SET_AUDIO_SHARE_RECORD_UNCOMPRESSION_BUFFER( nDeviceIndex , pFrameBuffer, nFrameBufferLen, dSampleTime );
-
-    }
+    Q_UNUSED( nDeviceIndex );
 
     return QCAP_RT_OK;
+
+}
+
+
+QRESULT new_video_cudahostbuf( free_stack_t& _FreeStack_, ULONG nColorSpaceType, ULONG nWidth, ULONG nHeight, unsigned int nFlags, qcap2_rcbuffer_t** ppRCBuffer ) {
+
+    QRESULT qres = QCAP_RS_SUCCESSFUL;
+
+    switch(1) { case 1:
+        qcap2_rcbuffer_t* pRCBuffer = qcap2_rcbuffer_new_av_frame();
+        _FreeStack_ += [pRCBuffer]() {
+            qcap2_rcbuffer_delete(pRCBuffer);
+        };
+
+        qcap2_av_frame_t* pAVFrame = (qcap2_av_frame_t*)qcap2_rcbuffer_get_data(pRCBuffer);
+        qcap2_av_frame_set_video_property(pAVFrame, nColorSpaceType, nWidth, nHeight);
+
+        if(! qcap2_av_frame_alloc_cuda_host_buffer(pAVFrame, nFlags, 32, 1)) {
+            qres = QCAP_RS_ERROR_OUT_OF_MEMORY;
+            printf("[QCAP DEBUG] %s(%d): qcap2_av_frame_alloc_cuda_host_buffer() failed", __FUNCTION__, __LINE__);
+            break;
+        }
+        _FreeStack_ += [pAVFrame]() {
+            qcap2_av_frame_free_cuda_host_buffer(pAVFrame);
+        };
+
+        *ppRCBuffer = pRCBuffer;
+    }
+
+    return qres;
 
 }
 
@@ -280,15 +337,15 @@ MainWindow::MainWindow(QWidget *parent) :
     Func_OutputFolder_Check( m_qszOutputPath );
 
 
-    ////// Auto Snapshot ( Per 2 Sec Snapshot )
+    ////// Auto Detect Disk Usage ( Per 2 Sec Snapshot )
 
     m_qtStorage = QStorageInfo( QDir( QCoreApplication::applicationFilePath() ) );
 
     m_stFunc_Device.st_pDiskUsageTimer = new QTimer( this );
 
-//    connect( m_stFunc_Device.st_pDiskUsageTimer, &QTimer::timeout, this, &MainWindow::Func_Live_Snapshot );
+    connect( m_stFunc_Device.st_pDiskUsageTimer, &QTimer::timeout, this, &MainWindow::Func_DiskUsage_Update );
 
-    m_stFunc_Device.st_pDiskUsageTimer->start( 2000 );
+    m_stFunc_Device.st_pDiskUsageTimer->start( DISKCHECK_INTERVAL );
 
 
     ////// Param List Init
@@ -301,15 +358,6 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->Frame_CropBMP->setAspectRatio( 508.0 / 556.0 );
 
     ui->Frame_Live->setAspectRatio( 1324.0 / 1025.0 );
-
-
-    ////// Auto Detect Disk Usage ( Per 1 Sec Check )
-
-    m_stFunc_Device.st_pSnapshotTimer = new QTimer( this );
-
-    connect( m_stFunc_Device.st_pSnapshotTimer, &QTimer::timeout, this, &MainWindow::Func_DiskUsage_Update );
-
-    m_stFunc_Device.st_pSnapshotTimer->start( 1000 );
 
 
     this->resize(1920, 1080);
@@ -336,6 +384,10 @@ MainWindow::MainWindow(QWidget *parent) :
     }
 
     HwInitialize();
+
+    Func_Live_Scaler_Init( m_stFunc_Device.st_oFreeStack, 0, 0, 1324, 1026, &m_stFunc_Device.st_pScaler );
+
+    Func_Live_Sink_Init( m_stFunc_Device.st_oFreeStack, QCAP_COLORSPACE_TYPE_I420, 1324, 1026, ui->Frame_Live, &m_stFunc_Device.st_pSink );
 
 }
 
@@ -378,6 +430,18 @@ void MainWindow::HwInitialize()
         QCAP_REGISTER_AUDIO_PREVIEW_CALLBACK( m_hDevice, on_process_audio_preview, ( PVOID ) ( ULONG ) 0 );
 
         QCAP_SET_VIDEO_DEFAULT_OUTPUT_FORMAT( m_hDevice, m_stParam_Device.st_nVideoColorSpaceType, 0, 0, 0, 0 );
+
+        QCAP_SET_DEVICE_CUSTOM_PROPERTY( m_hDevice, QCAP_DEVPROP_IO_METHOD, 1 );
+
+        for( INT iBufferCount = 0; iBufferCount < MAX_CUDA_BUFFER_NUM; iBufferCount++ ) {
+
+            QCAP_ALLOC_VIDEO_GPUDIRECT_PREVIEW_BUFFER( m_hDevice, &m_stFunc_Device.st_pCUDABuffer_S[ iBufferCount ], SOURCE_WIDTH * SOURCE_HEIGHT * 2 );
+
+            QCAP_BIND_VIDEO_GPUDIRECT_PREVIEW_BUFFER( m_hDevice, iBufferCount, m_stFunc_Device.st_pCUDABuffer_S[ iBufferCount ], SOURCE_WIDTH * SOURCE_HEIGHT * 2 );
+
+            printf( "[QCAP DEBUG] CUDA buffer id:%d, pointer:%p \n", iBufferCount, m_stFunc_Device.st_pCUDABuffer_S[ iBufferCount ] );
+
+        }
 
         QCAP_RUN( m_hDevice );
 
@@ -465,7 +529,9 @@ void MainWindow::HwUninitialize()
 
     //DESTROY CAPTURE DEVICE
 
-    if( m_stFunc_Device.st_bShareRecord_Live == TRUE ) Func_Live_Preview();
+    m_stFunc_Device.st_bSinkState = FALSE;
+
+    m_stFunc_Device.st_oFreeStack.flush();
 
     if( m_hDevice != nullptr ) {
 
@@ -473,7 +539,7 @@ void MainWindow::HwUninitialize()
 
         QCAP_DESTROY( m_hDevice );
 
-        m_hDevice= nullptr;
+        m_hDevice = nullptr;
 
     }
 
@@ -585,91 +651,112 @@ void MainWindow::Func_DiskUsage_Update()
 }
 
 
-void MainWindow::Func_Live_Preview()
+QRESULT MainWindow::Func_Live_Scaler_Init( free_stack_t& _FreeStack_, ULONG nCropX, ULONG nCropY, ULONG nCropW, ULONG nCropH, qcap2_video_scaler_t** ppVsca )
 {
 
-    ULONG nShareRecordIndex = 0;
+    QRESULT qres = QCAP_RS_SUCCESSFUL;
+    switch(1) { case 1:
+        const int nBuffers = 4;
+        const ULONG nColorSpaceType = QCAP_COLORSPACE_TYPE_I420;
+        qcap2_video_scaler_t* pVsca = qcap2_video_scaler_new();
+        _FreeStack_ += [&pVsca]() {
+            qcap2_video_scaler_delete(pVsca);
+            pVsca = nullptr;
+        };
 
-    if( m_stFunc_Device.st_bShareRecord_Live == FALSE ) {
-
-        ULONG nPreview_W = 0;
-
-        m_stParam_Device.st_nVideoWidth > 1920 ? nPreview_W = 1920 : nPreview_W = m_stParam_Device.st_nVideoWidth;
-
-        ULONG nPreview_H = 0;
-
-        m_stParam_Device.st_nVideoHeight > 1080 ? nPreview_H = 1080 : nPreview_H = m_stParam_Device.st_nVideoHeight;
-
-        double nPreview_FR = 0;
-
-        m_stParam_Device.st_dVideoFrameRate > 30 ? nPreview_FR = 30 : nPreview_FR = m_stParam_Device.st_dVideoFrameRate;
-
-        QCAP_SET_VIDEO_SHARE_RECORD_PROPERTY_EX( nShareRecordIndex, 0, QCAP_ENCODER_TYPE_ZZNVCODEC, QCAP_ENCODER_FORMAT_H264
-                                                 , m_stParam_Device.st_nVideoColorSpaceType
-                                                 , nPreview_W, nPreview_H, nPreview_FR
-                                                 , QCAP_RECORD_PROFILE_MAIN, QCAP_RECORD_LEVEL_41, QCAP_RECORD_ENTROPY_CAVLC
-                                                 , QCAP_RECORD_COMPLEXITY_0, QCAP_RECORD_MODE_CBR, 8000
-                                                 , 30 * 1024 *1024, 30, 0 , m_stParam_Device.st_bVideoIsInterleaved
-                                                 , 0, 0, 0, TRUE, FALSE, FALSE, 0, 0, 0, 0, 0, 0,  0, ( HWND ) ui->Frame_Live->winId(), TRUE, FALSE );
-
-        QCAP_SET_AUDIO_SHARE_RECORD_PROPERTY( nShareRecordIndex, QCAP_ENCODER_TYPE_SOFTWARE, QCAP_ENCODER_FORMAT_AAC
-                                              , m_stParam_Device.st_nAudioChannels
-                                              , m_stParam_Device.st_nAudioBitsPerSample
-                                              , m_stParam_Device.st_nAudioSampleFrequency );
-
-        double dShareRecordFPS = m_stParam_Device.st_dVideoFrameRate;
-
-        QRESULT RT = QCAP_SET_VIDEO_SHARE_RECORD_CUSTOM_PROPERTY( nShareRecordIndex, QCAP_SRPROP_SOURCE_FRAME_RATE, ( BYTE * )&dShareRecordFPS, sizeof( dShareRecordFPS ) );
-
-        if( RT != QCAP_RS_SUCCESSFUL )  printf( "[QCAP DEBUG] SET 'QCAP_SRPROP_SOURCE_FRAME_RATE' Fail, Error = %d !!!\n", RT );
-
-        QRESULT RT_Flag = QCAP_START_SHARE_RECORD( nShareRecordIndex , nullptr, QCAP_RECORD_FLAG_DISPLAY );
-
-        if( RT_Flag == QCAP_RS_SUCCESSFUL ) {
-
-            m_stFunc_Device.st_bShareRecord_Live = TRUE;
-
+        qcap2_rcbuffer_t** pRCBuffers = new qcap2_rcbuffer_t*[nBuffers];
+        _FreeStack_ += [pRCBuffers]() {
+            delete[] pRCBuffers;
+        };
+        for(int i = 0;i < nBuffers;i++) {
+            qcap2_rcbuffer_t* pRCBuffer;
+            qres = new_video_cudahostbuf(_FreeStack_,
+                                         nColorSpaceType, nCropW, nCropH, cudaHostAllocMapped, &pRCBuffer);
+            if(qres != QCAP_RS_SUCCESSFUL) {
+                printf("[QCAP DEBUG] %s(%d): __testkit__::new_video_cudahostbuf() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+                break;
+            }
+            pRCBuffers[i] = pRCBuffer;
         }
+        qcap2_video_scaler_set_backend_type(pVsca, QCAP2_VIDEO_SCALER_BACKEND_TYPE_NPP);
+        qcap2_video_scaler_set_multithread(pVsca, false);
+        qcap2_video_scaler_set_frame_count(pVsca, nBuffers);
+        qcap2_video_scaler_set_buffers(pVsca, &pRCBuffers[0]);
+        qcap2_video_scaler_set_src_buffer_hint(pVsca, QCAP2_BUFFER_HINT_CUDAHOST);
+        qcap2_video_scaler_set_dst_buffer_hint(pVsca, QCAP2_BUFFER_HINT_CUDAHOST);
+        qcap2_video_scaler_set_crop(pVsca, nCropX, nCropY, nCropW, nCropH);
+    {
+        std::shared_ptr<qcap2_video_format_t> pVideoFormat(
+                    qcap2_video_format_new(), qcap2_video_format_delete);
 
-    } else {
+        qcap2_video_format_set_property(pVideoFormat.get(),
+                                        nColorSpaceType, nCropW, nCropH, FALSE, 60.0);
 
-        QRESULT RT = QCAP_STOP_SHARE_RECORD( nShareRecordIndex );
-
-        if( RT == QCAP_RS_SUCCESSFUL ) {
-
-            m_stFunc_Device.st_bShareRecord_Live = FALSE;
-
-        }
-
+        qcap2_video_scaler_set_video_format(pVsca, pVideoFormat.get());
     }
-
+        qres = qcap2_video_scaler_start(pVsca);
+        if(qres != QCAP_RS_SUCCESSFUL) {
+            printf("[QCAP DEBUG] %s(%d): qcap2_video_scaler_start() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+            break;
+        }
+        _FreeStack_ += [pVsca]() {
+            QRESULT qres;
+            qres = qcap2_video_scaler_stop(pVsca);
+            if(qres != QCAP_RS_SUCCESSFUL) {
+                printf("[QCAP DEBUG] %s(%d): qcap2_video_scaler_stop() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+            }
+        };
+        *ppVsca = pVsca;
+    }
+    return qres;
 }
 
-
-void MainWindow::Func_Live_Snapshot()
+QRESULT MainWindow::Func_Live_Sink_Init( free_stack_t& _FreeStack_, ULONG nColorSpaceType, ULONG nVideoFrameWidth, ULONG nVideoFrameHeight, QFrame *pFrame, qcap2_video_sink_t** ppVsink )
 {
 
-    ULONG nShareRecordIndex = 0;
+    QRESULT qres = QCAP_RS_SUCCESSFUL;
 
-    if( m_stParam_Device.st_nVideoWidth <= 0 || m_stParam_Device.st_nVideoHeight <= 0 ) {
+    switch(1) { case 1:
+        qcap2_video_sink_t* pVsink = qcap2_video_sink_new();
+        _FreeStack_ += [pVsink]() {
+            qcap2_video_sink_delete(pVsink);
+        };
 
-        printf( "[QCAP DEBUG] Please wait device signal lock \n" );
+        qcap2_video_sink_set_backend_type(pVsink, QCAP2_VIDEO_SINK_BACKEND_TYPE_GSTREAMER);
 
-        return;
+        qcap2_video_sink_set_gst_sink_name(pVsink, "xvimagesink");
 
+        qcap2_video_sink_set_native_handle(pVsink, pFrame->winId());
+
+    {
+        std::shared_ptr<qcap2_video_format_t> pVideoFormat(
+                    qcap2_video_format_new(), qcap2_video_format_delete);
+
+        qcap2_video_format_set_property(pVideoFormat.get(),
+                                        nColorSpaceType, nVideoFrameWidth, nVideoFrameHeight, FALSE, 60);
+
+        qcap2_video_sink_set_video_format(pVsink, pVideoFormat.get());
     }
 
-    if( m_stFunc_Device.st_bShareRecord_Live != TRUE ) {
+        qres = qcap2_video_sink_start(pVsink);
+        if(qres != QCAP_RS_SUCCESSFUL) {
+            printf("[QCAP DEBUG] %s(%d): qcap2_video_sink_start() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+            break;
+        } else {
+            m_stFunc_Device.st_bSinkState = TRUE;
+        }
 
-        printf( "[QCAP DEBUG] ShareRecord Live is not running. Please check the device.\n" );
+        _FreeStack_ += [pVsink]() {
+            QRESULT qres;
 
-        return;
+            qres = qcap2_video_sink_stop(pVsink);
+            if(qres != QCAP_RS_SUCCESSFUL) {
+                printf("[QCAP DEBUG] %s(%d): qcap2_video_sink_start() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+            }
+        };
 
+        *ppVsink = pVsink;
     }
 
-    QString qszFilePath = m_qszOutputPath + QDateTime::currentDateTime().toString( Qt::ISODateWithMs ) + QString( ".bmp" );
-
-//    QCAP_SNAPSHOT_SHARE_RECORD_BMP( nShareRecordIndex,qszFilePath.toLocal8Bit().data(), TRUE );
-
+    return qres;
 }
-

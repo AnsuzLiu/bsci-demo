@@ -6,15 +6,98 @@
 #include <QDir>
 #include <QProcess>
 #include <QtGui>
+#include <QFrame>
 
 #include <cstdlib>
+#include <stack>
 
 #include <qcap.h>
 #include <qcap.linux.h>
 #include <qcap.common.h>
+#include <qcap2.h>
+#include "qcap2.nvbuf.h"
+#include "qcap2.cuda.h"
+#include "qcap2.gst.h"
+#include "qcap2.user.h"
+
 #include <processinference.h>
 
+#define DISKCHECK_INTERVAL 2000 //ms
+
+#define SOURCE_WIDTH 1920
+
+#define SOURCE_HEIGHT 1080
+
+#define MAX_CUDA_BUFFER_NUM 10
+
 class processinference;
+
+
+struct free_stack_t : protected std::stack< std::function< void () >> {
+
+    typedef free_stack_t self_t;
+
+    typedef std::stack< std::function< void () > > parent_t;
+
+    free_stack_t() {
+    }
+
+    ~free_stack_t() {
+
+        if( ! empty() ) {
+
+            printf( "%s(%d): unexpected value, size()=%ld \n", __FUNCTION__, __LINE__, size() );
+
+        }
+
+    }
+
+    template<class FUNC>
+
+    free_stack_t& operator +=( const FUNC& func ) {
+
+        push( func );
+
+        return *this;
+
+    }
+
+    void flush() {
+
+        while( ! empty() ) {
+
+            top()();
+
+            pop();
+
+        }
+
+    }
+
+};
+
+struct callback_t {
+
+    typedef callback_t self_t;
+
+    typedef std::function<QRETURN ()> cb_func_t;
+
+    cb_func_t func;
+
+    template< class FUNC >
+
+    callback_t( FUNC func ) : func( func ) {
+    }
+
+    static QRETURN _func( PVOID pUserData ) {
+
+        self_t * pThis = ( self_t * )pUserData;
+
+        return pThis->func();
+
+    }
+
+};
 
 struct SourceParam {
 
@@ -38,11 +121,18 @@ struct SourceParam {
 
 struct FunctionParam {
 
-    QTimer *    st_pDiskUsageTimer;
+    QTimer *        st_pDiskUsageTimer;
 
-    QTimer *    st_pSnapshotTimer;
+    free_stack_t    st_oFreeStack;
 
-    BOOL        st_bShareRecord_Live        = FALSE;
+    BYTE *          st_pCUDABuffer_S[ MAX_CUDA_BUFFER_NUM ];
+
+    qcap2_video_scaler_t *  st_pScaler                  = nullptr;
+
+    qcap2_video_sink_t *    st_pSink                    = nullptr;
+
+    BOOL                    st_bSinkState               = FALSE;
+
 
 };
 
@@ -72,9 +162,9 @@ public:
 
     void Func_DiskUsage_Update();
 
-    void Func_Live_Preview();
+    QRESULT Func_Live_Scaler_Init( free_stack_t& _FreeStack_, ULONG nCropX, ULONG nCropY, ULONG nCropW, ULONG nCropH, qcap2_video_scaler_t** ppVsca );
 
-    void Func_Live_Snapshot();
+    QRESULT Func_Live_Sink_Init( free_stack_t& _FreeStack_, ULONG nColorSpaceType, ULONG nVideoFrameWidth, ULONG nVideoFrameHeight, QFrame *pFrame, qcap2_video_sink_t** ppVsink );
 
     //// DEVICE HANDLE
 
