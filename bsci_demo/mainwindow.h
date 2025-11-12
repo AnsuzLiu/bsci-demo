@@ -21,14 +21,26 @@
 #include "qcap2.user.h"
 
 #include <processinference.h>
+#include <aspectratioframe.h>
+#include <bmpfinder.h>
 
 #define DISKCHECK_INTERVAL 2000 //ms
+
+#define BMP_SCAN_INTERVAL 500 //ms
 
 #define SOURCE_WIDTH 1920
 
 #define SOURCE_HEIGHT 1080
 
 #define MAX_CUDA_BUFFER_NUM 10
+
+#define LIVE_WIDTH 1324
+
+#define LIVE_HEIGHT 1026
+
+#define CROP_WIDTH 556
+
+#define CROP_HEIGHT 508
 
 class processinference;
 
@@ -121,18 +133,21 @@ struct SourceParam {
 
 struct FunctionParam {
 
-    QTimer *        st_pDiskUsageTimer;
+    QTimer *                st_pDiskUsageTimer;
 
-    free_stack_t    st_oFreeStack;
+    free_stack_t            st_oFreeStack;
 
-    BYTE *          st_pCUDABuffer_S[ MAX_CUDA_BUFFER_NUM ];
+    BYTE *                  st_pCUDABuffer_S[ MAX_CUDA_BUFFER_NUM ];
 
-    qcap2_video_scaler_t *  st_pScaler                  = nullptr;
+    qcap2_video_scaler_t *  st_pScaler_Live         = nullptr;
 
-    qcap2_video_sink_t *    st_pSink                    = nullptr;
+    qcap2_video_sink_t *    st_pSink_Live           = nullptr;
 
-    BOOL                    st_bSinkState               = FALSE;
+    BOOL                    st_bSinkState           = FALSE;
 
+    qcap2_video_scaler_t *  st_pScaler_Crop         = nullptr;
+
+    BOOL                    st_bStorageCropRaw      = FALSE;
 
 };
 
@@ -162,9 +177,13 @@ public:
 
     void Func_DiskUsage_Update();
 
+    void Func_Output_BmpUpdate( const QString &path );
+
     QRESULT Func_Live_Scaler_Init( free_stack_t& _FreeStack_, ULONG nCropX, ULONG nCropY, ULONG nCropW, ULONG nCropH, qcap2_video_scaler_t** ppVsca );
 
     QRESULT Func_Live_Sink_Init( free_stack_t& _FreeStack_, ULONG nColorSpaceType, ULONG nVideoFrameWidth, ULONG nVideoFrameHeight, QFrame *pFrame, qcap2_video_sink_t** ppVsink );
+
+    QRESULT Func_Crop_Scaler_Init( free_stack_t& _FreeStack_, ULONG nCropX, ULONG nCropY, ULONG nCropW, ULONG nCropH, qcap2_video_scaler_t** ppVsca );
 
     //// DEVICE HANDLE
 
@@ -198,6 +217,8 @@ public:
 
 private slots:
     void on_btn_changepassword_clicked();
+
+    void on_BTN_StorgeCropData_clicked();
 
 private:
 

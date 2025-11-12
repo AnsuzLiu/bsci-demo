@@ -151,6 +151,19 @@
      <bool>true</bool>
     </property>
    </widget>
+   <widget class="QPushButton" name="BTN_StorgeCropData">
+    <property name="geometry">
+     <rect>
+      <x>420</x>
+      <y>710</y>
+      <width>141</width>
+      <height>25</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Storge Crop Raw</string>
+    </property>
+   </widget>
   </widget>
  </widget>
  <layoutdefault spacing="6" margin="11"/>

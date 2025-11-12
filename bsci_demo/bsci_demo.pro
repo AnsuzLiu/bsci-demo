@@ -4,7 +4,7 @@
 #
 #-------------------------------------------------
 
-QT       += core gui
+QT       += core gui concurrent
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
@@ -37,6 +37,7 @@ LIBS += \
 
 
 SOURCES += \
+    bmpfinder.cpp \
         main.cpp \
         mainwindow.cpp \
     processinference.cpp \
@@ -45,6 +46,7 @@ SOURCES += \
     aspectratioframe.cpp
 
 HEADERS += \
+    bmpfinder.h \
         mainwindow.h \
     processinference.h \
     setpassworddialog.h \

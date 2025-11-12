@@ -41,7 +41,8 @@
 class processinference : public __testkit__::TestCase
 {
     public:
-        processinference(QFrame *frame);
+//    qszBMPOutputPath
+        processinference(QFrame *frame, const QString &outputPath);
         ~processinference();
         QRETURN OnStart(__testkit__::free_stack_t& _FreeStack_, QRESULT& qres);
         QRESULT OnStartTimer(__testkit__::free_stack_t& _FreeStack_, qcap2_event_handlers_t* pEventHandlers, qcap2_video_scaler_t* pVsca, qcap2_rcbuffer_t* pVsrc);
@@ -57,6 +58,7 @@ class processinference : public __testkit__::TestCase
         qcap2_video_sink_t* pVsink_infer = nullptr;
 
         bool bInferSink = false;
+        QString     l_qszOutputPath;
 
     private:
         QFrame *m_frame = nullptr;

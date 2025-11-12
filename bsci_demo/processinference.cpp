@@ -1,6 +1,9 @@
 #include "processinference.h"
 
 static QRETURN OnEvent_infer_sca(qcap2_video_scaler_t* pVsca, qcap2_video_sink_t* pVsink, PVOID pUserData) {
+
+    processinference* m_pProcessinference = (processinference*)pUserData;
+
     QRESULT qres;
     QRETURN qret = QCAP_RT_OK;
 
@@ -24,6 +27,7 @@ static QRETURN OnEvent_infer_sca(qcap2_video_scaler_t* pVsca, qcap2_video_sink_t
         return QCAP_RT_FAIL;
     }
 
+/*
 #if SNAPSHOT_ENABLE
     switch(1) { case 1:
         static int nIndex = 0;
@@ -38,7 +42,30 @@ static QRETURN OnEvent_infer_sca(qcap2_video_scaler_t* pVsca, qcap2_video_sink_t
 
         qres = qcap2_av_frame_store_picture(pAVFrame_i420.get(), fn);
         if(qres != QCAP_RS_SUCCESSFUL) {
-            LOGE("%s(%d): qcap2_av_frame_store_picture() failed, qres=%d", qres);
+            LOGE("%s(%d): qcap2_av_frame_store_picture() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+            break;
+        }
+    }
+#endif
+    */
+
+#if SNAPSHOT_ENABLE
+    switch(1) { case 1:
+        static int nIndex = 0;
+
+        char fn[PATH_MAX];
+
+        if(nIndex > 30) break;
+
+        sprintf(fn, "%s/snapshot-%02d.jpg", m_pProcessinference->l_qszOutputPath.toUtf8().data(), nIndex);
+
+        printf("[QCAP DEBUG] %s\n", fn);
+
+        if(nIndex++ >= 100) nIndex = 0;
+
+        qres = qcap2_av_frame_store_picture(pAVFrame_i420.get(), fn);
+        if(qres != QCAP_RS_SUCCESSFUL) {
+            LOGE("%s(%d): qcap2_av_frame_store_picture() failed, qres=%d", __FUNCTION__, __LINE__, qres);
             break;
         }
     }
@@ -274,8 +301,9 @@ QRETURN processinference::OnStart(__testkit__::free_stack_t& _FreeStack_, QRESUL
     return QCAP_RT_OK;
 }
 
-processinference::processinference(QFrame *frame)
-    : m_frame(frame) {
+processinference::processinference(QFrame *frame, const QString &outputPath)
+    : m_frame(frame),
+      l_qszOutputPath(outputPath) {
     QRESULT qres = StartEventHandlers();
 
     if (qres != QCAP_RS_SUCCESSFUL) {

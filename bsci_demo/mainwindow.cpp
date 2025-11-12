@@ -230,35 +230,101 @@ QRETURN on_process_video_preview( PVOID pDevice, double dSampleTime, BYTE* pFram
 
     Q_UNUSED( nDeviceIndex );
 
+
     if( g_pMain->m_stFunc_Device.st_bSinkState == TRUE
-            &&g_pMain->m_stFunc_Device.st_pSink != nullptr ) {
+            && g_pMain->m_stFunc_Device.st_pSink_Live != nullptr ) {
 
         QRESULT QR = QCAP_RS_SUCCESSFUL;
 
-        qcap2_rcbuffer_t* pSrcRCBuffer = qcap2_rcbuffer_cast( pFrameBuffer, nFrameBufferLen );
+        qcap2_rcbuffer_t * pSrcRCBuffer = qcap2_rcbuffer_cast( pFrameBuffer, nFrameBufferLen );
 
-        std::shared_ptr<qcap2_rcbuffer_t> pDstRCBuffer = nullptr;
+        std::shared_ptr< qcap2_rcbuffer_t > pDstLiveRCBuffer = nullptr;
+
+
+        ////// Capture to Live
 
         if( g_pMain->m_stFunc_Device.st_bSinkState == TRUE
-                &&g_pMain->m_stFunc_Device.st_pScaler != nullptr ) {
+                && g_pMain->m_stFunc_Device.st_pScaler_Live != nullptr ) {
 
-            qcap2_video_scaler_push( g_pMain->m_stFunc_Device.st_pScaler, pSrcRCBuffer );
+            qcap2_video_scaler_push( g_pMain->m_stFunc_Device.st_pScaler_Live, pSrcRCBuffer );
 
-            qcap2_rcbuffer_t * pTempBuffer = nullptr;
+            qcap2_rcbuffer_t * pLiveTempBuffer = nullptr;
 
-            qcap2_video_scaler_pop( g_pMain->m_stFunc_Device.st_pScaler, &pTempBuffer );
+            qcap2_video_scaler_pop( g_pMain->m_stFunc_Device.st_pScaler_Live, &pLiveTempBuffer );
 
-            pDstRCBuffer.reset( pTempBuffer, qcap2_rcbuffer_release );
+            pDstLiveRCBuffer.reset( pLiveTempBuffer, qcap2_rcbuffer_release );
 
         } else {
 
-            pDstRCBuffer.reset( pSrcRCBuffer, qcap2_rcbuffer_release );
+            pDstLiveRCBuffer.reset( pSrcRCBuffer, qcap2_rcbuffer_release );
 
         }
 
-        QR = qcap2_video_sink_push( g_pMain->m_stFunc_Device.st_pSink, pDstRCBuffer.get() );
+        QR = qcap2_video_sink_push( g_pMain->m_stFunc_Device.st_pSink_Live, pDstLiveRCBuffer.get() );
 
         if( QR != QCAP_RS_SUCCESSFUL ) printf("[QCAP DEBUG] %s(%d): qcap2_video_sink_push ( Video Preview callback ) Failed ( %d )!!! \n", __FUNCTION__, __LINE__, QR );
+
+
+        ////// Live Crop to Output Data
+
+        if( g_pMain->m_stFunc_Device.st_bSinkState == TRUE
+                && g_pMain->m_stFunc_Device.st_bStorageCropRaw == TRUE
+                && g_pMain->m_stFunc_Device.st_pScaler_Crop != nullptr ) {
+
+            qcap2_video_scaler_push( g_pMain->m_stFunc_Device.st_pScaler_Crop, pDstLiveRCBuffer.get() );
+
+            qcap2_rcbuffer_t * pCropTempBuffer = nullptr;
+
+            qcap2_video_scaler_pop( g_pMain->m_stFunc_Device.st_pScaler_Crop, &pCropTempBuffer );
+
+            std::shared_ptr< qcap2_rcbuffer_t > pRCBuffer1 ( pCropTempBuffer, qcap2_rcbuffer_release );
+
+            std::shared_ptr<qcap2_av_frame_t> pAVFrame1(
+             (qcap2_av_frame_t*)qcap2_rcbuffer_lock_data( pCropTempBuffer ),
+             [ pCropTempBuffer ]( qcap2_av_frame_t * ) {
+              qcap2_rcbuffer_unlock_data( pCropTempBuffer );
+             });
+
+            uint8_t* pBuffer[4];
+
+            int nStride[4];
+
+            qcap2_av_frame_get_buffer1( pAVFrame1.get(), pBuffer, nStride );
+
+            ULONG mColorSpaceType = 0;
+
+            ULONG nBufferWidth = 0;
+
+            ULONG nBufferHeight = 0;
+
+            qcap2_av_frame_get_video_property( pAVFrame1.get(), &mColorSpaceType, &nBufferWidth, &nBufferHeight);
+
+            ////// RAW DATA //////
+
+            FILE * pFp_Scaler = NULL;
+
+            QString  szRecord_Path = g_pMain->m_qszAppPath + QString( "/GBRPScaler" )
+                    + QString( "_W" ) + QString::number( CROP_WIDTH )
+                    + QString( "_H" ) + QString::number( CROP_HEIGHT )
+                    + QString( ".raw" );
+
+            pFp_Scaler = fopen( szRecord_Path.toUtf8().data(), "wb" );
+
+            for( UINT iFrameHeight = 0 ; iFrameHeight < nBufferHeight; iFrameHeight++ ) fwrite( pBuffer[ 0 ] + iFrameHeight * nStride[ 0 ], 1, nBufferWidth, pFp_Scaler );
+
+            for( UINT iFrameHeight = 0 ; iFrameHeight < nBufferHeight; iFrameHeight++ ) fwrite( pBuffer[ 1 ] + iFrameHeight * nStride[ 1 ], 1, nBufferWidth, pFp_Scaler );
+
+            for( UINT iFrameHeight = 0 ; iFrameHeight < nBufferHeight; iFrameHeight++ ) fwrite( pBuffer[ 2 ] + iFrameHeight * nStride[ 2 ], 1, nBufferWidth, pFp_Scaler );
+
+            fclose( pFp_Scaler );
+
+            printf("[QCAP DEBUG] Try storage GBRP to: %s\n", szRecord_Path.toUtf8().data() );
+
+            ////// RAW DATA //////
+
+            g_pMain->m_stFunc_Device.st_bStorageCropRaw = FALSE;
+
+        }
 
     }
 
@@ -324,8 +390,6 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->setupUi(this);
 
-    m_infer = new processinference(ui->Frame_CropBMP);
-
     g_pMain = this;
 
     ////// Check Output Folder
@@ -335,6 +399,8 @@ MainWindow::MainWindow(QWidget *parent) :
     m_qszOutputPath = m_qszAppPath + "/data/frames/";
 
     Func_OutputFolder_Check( m_qszOutputPath );
+
+    m_infer = new processinference(ui->Frame_CropBMP, m_qszOutputPath);
 
 
     ////// Auto Detect Disk Usage ( Per 2 Sec Snapshot )
@@ -358,6 +424,13 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->Frame_CropBMP->setAspectRatio( 508.0 / 556.0 );
 
     ui->Frame_Live->setAspectRatio( 1324.0 / 1025.0 );
+
+
+    ////// Output Folder Bmp File
+
+    BmpFinder * loader = new BmpFinder( m_qszOutputPath, BMP_SCAN_INTERVAL, this );
+
+    connect( loader, &BmpFinder::Signal_Bmp_LatestFound, this, &MainWindow::Func_Output_BmpUpdate );
 
 
     this->resize(1920, 1080);
@@ -385,9 +458,11 @@ MainWindow::MainWindow(QWidget *parent) :
 
     HwInitialize();
 
-    Func_Live_Scaler_Init( m_stFunc_Device.st_oFreeStack, 0, 0, 1324, 1026, &m_stFunc_Device.st_pScaler );
+    Func_Live_Scaler_Init( m_stFunc_Device.st_oFreeStack, 0, 0, LIVE_WIDTH, LIVE_HEIGHT, &m_stFunc_Device.st_pScaler_Live );
 
-    Func_Live_Sink_Init( m_stFunc_Device.st_oFreeStack, QCAP_COLORSPACE_TYPE_I420, 1324, 1026, ui->Frame_Live, &m_stFunc_Device.st_pSink );
+    Func_Live_Sink_Init( m_stFunc_Device.st_oFreeStack, QCAP_COLORSPACE_TYPE_I420, LIVE_WIDTH, LIVE_HEIGHT, ui->Frame_Live, &m_stFunc_Device.st_pSink_Live );
+
+    Func_Crop_Scaler_Init( m_stFunc_Device.st_oFreeStack, 0, 0, CROP_WIDTH, CROP_HEIGHT, &m_stFunc_Device.st_pScaler_Crop );
 
 }
 
@@ -474,26 +549,26 @@ QString MainWindow::detectUsbPath()
 
 bool MainWindow::copyRecursively(const QString &srcPath, const QString &dstPath)
 {
-//    printf("copy image\n");
+    //    printf("copy image\n");
 
     QDir srcDir(srcPath);
-        QStringList files = srcDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+    QStringList files = srcDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
 
-        if (files.isEmpty()) {
-            return false; // nothing to move
-        }
+    if (files.isEmpty()) {
+        return false; // nothing to move
+    }
 
-        ui->labelStatus->setText("Copying files...");
-        ui->progressBar->setRange(0, 0);
+    ui->labelStatus->setText("Copying files...");
+    ui->progressBar->setRange(0, 0);
 
-        QProcess process;
-        QString cmd = QString("bash -c \"mv '%1'/* '%2'/\"").arg(srcPath, dstPath);
-        int ret = process.execute(cmd);
+    QProcess process;
+    QString cmd = QString("bash -c \"mv '%1'/* '%2'/\"").arg(srcPath, dstPath);
+    int ret = process.execute(cmd);
 
-        ui->progressBar->setRange(0, 100);
-        ui->progressBar->setValue(100);
+    ui->progressBar->setRange(0, 100);
+    ui->progressBar->setValue(100);
 
-        return (ret == 0);
+    return (ret == 0);
 }
 
 void MainWindow::checkUsb()
@@ -651,6 +726,14 @@ void MainWindow::Func_DiskUsage_Update()
 }
 
 
+void MainWindow::Func_Output_BmpUpdate( const QString &path )
+{
+
+    printf( "[QCAP DEBUG] New bmp file found: %s\n", path.toUtf8().data() );
+
+}
+
+
 QRESULT MainWindow::Func_Live_Scaler_Init( free_stack_t& _FreeStack_, ULONG nCropX, ULONG nCropY, ULONG nCropW, ULONG nCropH, qcap2_video_scaler_t** ppVsca )
 {
 
@@ -659,9 +742,8 @@ QRESULT MainWindow::Func_Live_Scaler_Init( free_stack_t& _FreeStack_, ULONG nCro
         const int nBuffers = 4;
         const ULONG nColorSpaceType = QCAP_COLORSPACE_TYPE_I420;
         qcap2_video_scaler_t* pVsca = qcap2_video_scaler_new();
-        _FreeStack_ += [&pVsca]() {
+        _FreeStack_ += [pVsca]() {
             qcap2_video_scaler_delete(pVsca);
-            pVsca = nullptr;
         };
 
         qcap2_rcbuffer_t** pRCBuffers = new qcap2_rcbuffer_t*[nBuffers];
@@ -678,6 +760,7 @@ QRESULT MainWindow::Func_Live_Scaler_Init( free_stack_t& _FreeStack_, ULONG nCro
             }
             pRCBuffers[i] = pRCBuffer;
         }
+
         qcap2_video_scaler_set_backend_type(pVsca, QCAP2_VIDEO_SCALER_BACKEND_TYPE_NPP);
         qcap2_video_scaler_set_multithread(pVsca, false);
         qcap2_video_scaler_set_frame_count(pVsca, nBuffers);
@@ -685,6 +768,7 @@ QRESULT MainWindow::Func_Live_Scaler_Init( free_stack_t& _FreeStack_, ULONG nCro
         qcap2_video_scaler_set_src_buffer_hint(pVsca, QCAP2_BUFFER_HINT_CUDAHOST);
         qcap2_video_scaler_set_dst_buffer_hint(pVsca, QCAP2_BUFFER_HINT_CUDAHOST);
         qcap2_video_scaler_set_crop(pVsca, nCropX, nCropY, nCropW, nCropH);
+
     {
         std::shared_ptr<qcap2_video_format_t> pVideoFormat(
                     qcap2_video_format_new(), qcap2_video_format_delete);
@@ -694,22 +778,30 @@ QRESULT MainWindow::Func_Live_Scaler_Init( free_stack_t& _FreeStack_, ULONG nCro
 
         qcap2_video_scaler_set_video_format(pVsca, pVideoFormat.get());
     }
+
         qres = qcap2_video_scaler_start(pVsca);
         if(qres != QCAP_RS_SUCCESSFUL) {
             printf("[QCAP DEBUG] %s(%d): qcap2_video_scaler_start() failed, qres=%d", __FUNCTION__, __LINE__, qres);
             break;
         }
+
         _FreeStack_ += [pVsca]() {
             QRESULT qres;
             qres = qcap2_video_scaler_stop(pVsca);
             if(qres != QCAP_RS_SUCCESSFUL) {
                 printf("[QCAP DEBUG] %s(%d): qcap2_video_scaler_stop() failed, qres=%d", __FUNCTION__, __LINE__, qres);
             }
+
         };
+
         *ppVsca = pVsca;
+
     }
+
     return qres;
+
 }
+
 
 QRESULT MainWindow::Func_Live_Sink_Init( free_stack_t& _FreeStack_, ULONG nColorSpaceType, ULONG nVideoFrameWidth, ULONG nVideoFrameHeight, QFrame *pFrame, qcap2_video_sink_t** ppVsink )
 {
@@ -760,3 +852,81 @@ QRESULT MainWindow::Func_Live_Sink_Init( free_stack_t& _FreeStack_, ULONG nColor
 
     return qres;
 }
+
+
+QRESULT MainWindow::Func_Crop_Scaler_Init( free_stack_t& _FreeStack_, ULONG nCropX, ULONG nCropY, ULONG nCropW, ULONG nCropH, qcap2_video_scaler_t** ppVsca )
+{
+
+    QRESULT qres = QCAP_RS_SUCCESSFUL;
+    switch(1) { case 1:
+        const int nBuffers = 4;
+        const ULONG nColorSpaceType = QCAP_COLORSPACE_TYPE_GBRP;
+        qcap2_video_scaler_t* pVsca = qcap2_video_scaler_new();
+        _FreeStack_ += [pVsca]() {
+            qcap2_video_scaler_delete(pVsca);
+        };
+
+        qcap2_rcbuffer_t** pRCBuffers = new qcap2_rcbuffer_t*[nBuffers];
+        _FreeStack_ += [pRCBuffers]() {
+            delete[] pRCBuffers;
+        };
+        for(int i = 0;i < nBuffers;i++) {
+            qcap2_rcbuffer_t* pRCBuffer;
+            qres = new_video_cudahostbuf(_FreeStack_,
+                                         nColorSpaceType, nCropW, nCropH, cudaHostAllocMapped, &pRCBuffer);
+            if(qres != QCAP_RS_SUCCESSFUL) {
+                printf("[QCAP DEBUG] %s(%d): __testkit__::new_video_cudahostbuf() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+                break;
+            }
+            pRCBuffers[i] = pRCBuffer;
+        }
+
+        qcap2_video_scaler_set_backend_type(pVsca, QCAP2_VIDEO_SCALER_BACKEND_TYPE_NPP);
+        qcap2_video_scaler_set_multithread(pVsca, false);
+        qcap2_video_scaler_set_frame_count(pVsca, nBuffers);
+        qcap2_video_scaler_set_buffers(pVsca, &pRCBuffers[0]);
+        qcap2_video_scaler_set_src_buffer_hint(pVsca, QCAP2_BUFFER_HINT_CUDAHOST);
+        qcap2_video_scaler_set_dst_buffer_hint(pVsca, QCAP2_BUFFER_HINT_CUDAHOST);
+        qcap2_video_scaler_set_crop(pVsca, nCropX, nCropY, nCropW, nCropH);
+
+    {
+
+        std::shared_ptr<qcap2_video_format_t> pVideoFormat(
+                    qcap2_video_format_new(), qcap2_video_format_delete);
+
+        qcap2_video_format_set_property(pVideoFormat.get(),
+                                        nColorSpaceType, nCropW, nCropH, FALSE, 60.0);
+
+        qcap2_video_scaler_set_video_format(pVsca, pVideoFormat.get());
+    }
+
+        qres = qcap2_video_scaler_start(pVsca);
+        if(qres != QCAP_RS_SUCCESSFUL) {
+            printf("[QCAP DEBUG] %s(%d): qcap2_video_scaler_start() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+            break;
+        }
+
+        _FreeStack_ += [pVsca]() {
+            QRESULT qres;
+            qres = qcap2_video_scaler_stop(pVsca);
+            if(qres != QCAP_RS_SUCCESSFUL) {
+                printf("[QCAP DEBUG] %s(%d): qcap2_video_scaler_stop() failed, qres=%d", __FUNCTION__, __LINE__, qres);
+            }
+        };
+
+        *ppVsca = pVsca;
+
+    }
+
+    return qres;
+
+}
+
+
+void MainWindow::on_BTN_StorgeCropData_clicked()
+{
+
+    m_stFunc_Device.st_bStorageCropRaw = TRUE;
+
+}
+
