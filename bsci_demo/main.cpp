@@ -3,6 +3,7 @@
 #include <QFile>
 #include "logindialog.h"
 #include "setpassworddialog.h"
+#include "screenwatcher.h"
 
 bool hasConfig() {
     QFile file("config.json");
@@ -12,6 +13,9 @@ bool hasConfig() {
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
+
+    screenwatcher watcher;
+
     if (!hasConfig()) {
         SetPasswordDialog setDialog;
         if (setDialog.exec() != QDialog::Accepted)

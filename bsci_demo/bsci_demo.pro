@@ -41,6 +41,7 @@ SOURCES += \
         main.cpp \
         mainwindow.cpp \
     processinference.cpp \
+    screenwatcher.cpp \
     setpassworddialog.cpp \
     logindialog.cpp \
     aspectratioframe.cpp
@@ -49,6 +50,7 @@ HEADERS += \
     bmpfinder.h \
         mainwindow.h \
     processinference.h \
+    screenwatcher.h \
     setpassworddialog.h \
     logindialog.h \
     aspectratioframe.h \

@@ -15,6 +15,7 @@
 #if BUILD_WITH_CUDA
 #include "qcap2.cuda.h"
 #endif
+#include "qcap2.gst.h"
 
 #include <sys/time.h>
 #include <stdint.h>
@@ -57,6 +58,19 @@ static inline void LOGE(const char* fmt, ...)
    va_end(args);
 }
 
+static inline void LOGW(const char* fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+
+    // 黃色：33
+    printf("\033[33m");
+    vprintf(fmt, args);
+
+    printf("\033[0m\n");
+
+    va_end(args);
+}
 
 namespace __testkit__ {
 
