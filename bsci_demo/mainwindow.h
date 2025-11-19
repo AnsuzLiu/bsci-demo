@@ -24,9 +24,13 @@
 #include <aspectratioframe.h>
 #include <bmpfinder.h>
 
+////// TIME INTERVAL
+
 #define DISKCHECK_INTERVAL 2000 //ms
 
 #define BMP_SCAN_INTERVAL 500 //ms
+
+////// SOURCE
 
 #define SOURCE_WIDTH 1920
 
@@ -34,9 +38,17 @@
 
 #define MAX_CUDA_BUFFER_NUM 10
 
-#define LIVE_WIDTH 1324
+////// FRAME ASPECT RATIO
 
-#define LIVE_HEIGHT 1026
+#define LIVE_FRAME_WIDTH 1324
+
+#define LIVE_FRAME_HEIGHT 1026
+
+#define INFER_FRAME_WIDTH 556
+
+#define INFER_FRAME_HEIGHT 508
+
+////// CROP SIZE
 
 #define CROP_WIDTH 556
 
@@ -149,6 +161,8 @@ struct FunctionParam {
 
     BOOL                    st_bStorageCropRaw      = FALSE;
 
+    BOOL                    st_bDiskOverwrite       = FALSE;
+
 };
 
 namespace Ui {
@@ -177,7 +191,7 @@ public:
 
     void Func_DiskUsage_Update();
 
-    void Func_Output_BmpUpdate( const QString &path );
+    void Func_OutputBmp_Update( const QString &path );
 
     QRESULT Func_Live_Scaler_Init( free_stack_t& _FreeStack_, ULONG nCropX, ULONG nCropY, ULONG nCropW, ULONG nCropH, qcap2_video_scaler_t** ppVsca );
 
@@ -216,6 +230,7 @@ public:
 
 
 private slots:
+
     void on_btn_changepassword_clicked();
 
     void on_BTN_StorgeCropData_clicked();

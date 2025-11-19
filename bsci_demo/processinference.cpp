@@ -150,7 +150,7 @@ QRESULT processinference::OnStartTimer(__testkit__::free_stack_t& _FreeStack_, q
 void processinference::sourceRGB(__testkit__::free_stack_t& _FreeStack_, qcap2_rcbuffer_t** ppRCBuffer) {
     QRESULT qres;
     qcap2_rcbuffer_t* pRCBuffer;
-    qres = new_video_cudahostbuf(_FreeStack_, QCAP_COLORSPACE_TYPE_GBRP, 560, 560, cudaHostAllocMapped, &pRCBuffer);
+    qres = new_video_cudahostbuf(_FreeStack_, QCAP_COLORSPACE_TYPE_GBRP, l_nInferFrameWidth, l_nInferFrameHeight, cudaHostAllocMapped, &pRCBuffer);
     if(qres != QCAP_RS_SUCCESSFUL) {
         LOGE("%s(%d): new_video_cudahostbuf() failed, qres=%d", __FUNCTION__, __LINE__, qres);
         return;
@@ -170,8 +170,8 @@ QRESULT processinference::StartVscaInferI420(__testkit__::free_stack_t& _FreeSta
     switch(1) { case 1:
         const int nBuffers = 2;
         const ULONG nColorSpaceType = QCAP_COLORSPACE_TYPE_I420;
-        const ULONG nVideoFrameWidth = 560;
-        const ULONG nVideoFrameHeight = 560;
+        const ULONG nVideoFrameWidth = l_nInferFrameWidth;
+        const ULONG nVideoFrameHeight = l_nInferFrameHeight;
 
         qcap2_video_scaler_t* pVsca = qcap2_video_scaler_new();
         _FreeStack_ += [pVsca]() {
@@ -284,7 +284,7 @@ QRETURN processinference::OnStart(__testkit__::free_stack_t& _FreeStack_, QRESUL
         LOGE("%s(%d): StartVsca() failed, qres=%d", __FUNCTION__, __LINE__, qres);
     }
     printf("pVsca_infer_i420 :%p \n", pVsca_infer_i420);
-    StartVscaInferVsink(_FreeStack_, QCAP_COLORSPACE_TYPE_I420, 560, 560, &pVsink_infer);
+    StartVscaInferVsink(_FreeStack_, QCAP_COLORSPACE_TYPE_I420, l_nInferFrameWidth, l_nInferFrameHeight, &pVsink_infer);
     qres = __testkit__::AddEventHandler(mFreeStack, pEventHandlers, pEvent_infer_sca, std::bind(&OnEvent_infer_sca, pVsca_infer_i420, pVsink_infer, this));
     if(qres != QCAP_RS_SUCCESSFUL) {
         LOGE("%s[%d]AddEventHandler Failed", __FUNCTION__, __LINE__);
@@ -301,9 +301,11 @@ QRETURN processinference::OnStart(__testkit__::free_stack_t& _FreeStack_, QRESUL
     return QCAP_RT_OK;
 }
 
-processinference::processinference(QFrame *frame, const QString &outputPath)
+processinference::processinference(QFrame *frame, const QString &outputPath, ULONG nInferWidth, ULONG nInferHeight )
     : m_frame(frame),
-      l_qszOutputPath(outputPath) {
+      l_qszOutputPath(outputPath),
+      l_nInferFrameWidth(nInferWidth),
+      l_nInferFrameHeight(nInferHeight) {
     QRESULT qres = StartEventHandlers();
 
     if (qres != QCAP_RS_SUCCESSFUL) {

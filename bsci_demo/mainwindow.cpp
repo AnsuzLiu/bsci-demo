@@ -104,6 +104,48 @@ void Func_OutputFolder_Check( const QString &qszPath )
 }
 
 
+void Func_OldestBmp_Delete( const QString &folderPath )
+{
+
+    QDirIterator DirIt( folderPath, {"*.bmp", "*.BMP"}, QDir::Files );
+
+    QFileInfo FileOldest;
+
+    BOOL bHasOldest = FALSE;
+
+    while( DirIt.hasNext() == TRUE ) {
+
+        DirIt.next();
+
+        QFileInfo FileTemp = DirIt.fileInfo();
+
+        if( bHasOldest == FALSE ) {
+
+            FileOldest = FileTemp;
+
+            bHasOldest = TRUE;
+
+        } else {
+
+            if( FileTemp.birthTime() < FileOldest.birthTime() ) {
+
+                FileOldest = FileTemp;
+
+            }
+
+        }
+
+    }
+
+    if( bHasOldest == TRUE ) {
+
+        QFile::remove( FileOldest.absoluteFilePath() );
+
+    }
+
+}
+
+
 QRETURN on_process_signal_removed(PVOID pDevice, ULONG nVideoInput, ULONG nAudioInput, PVOID pUserData )
 {
 
@@ -271,6 +313,10 @@ QRETURN on_process_video_preview( PVOID pDevice, double dSampleTime, BYTE* pFram
                 && g_pMain->m_stFunc_Device.st_bStorageCropRaw == TRUE
                 && g_pMain->m_stFunc_Device.st_pScaler_Crop != nullptr ) {
 
+            //////
+
+            if( g_pMain->m_stFunc_Device.st_bDiskOverwrite == TRUE ) Func_OldestBmp_Delete( g_pMain->m_qszOutputPath );
+
             qcap2_video_scaler_push( g_pMain->m_stFunc_Device.st_pScaler_Crop, pDstLiveRCBuffer.get() );
 
             qcap2_rcbuffer_t * pCropTempBuffer = nullptr;
@@ -303,12 +349,14 @@ QRETURN on_process_video_preview( PVOID pDevice, double dSampleTime, BYTE* pFram
 
             FILE * pFp_Scaler = NULL;
 
-            QString  szRecord_Path = g_pMain->m_qszAppPath + QString( "/GBRPScaler" )
-                    + QString( "_W" ) + QString::number( CROP_WIDTH )
-                    + QString( "_H" ) + QString::number( CROP_HEIGHT )
+            QString qszRecord_Path = g_pMain->m_qszOutputPath
+                    + QDateTime::currentDateTime().toString( Qt::ISODateWithMs )
+                    + QString( "_GBRPScaler" )
+                    + QString( "_W" ) + QString::number( LIVE_FRAME_WIDTH )
+                    + QString( "_H" ) + QString::number( LIVE_FRAME_HEIGHT )
                     + QString( ".raw" );
 
-            pFp_Scaler = fopen( szRecord_Path.toUtf8().data(), "wb" );
+            pFp_Scaler = fopen( qszRecord_Path.toUtf8().data(), "wb" );
 
             for( UINT iFrameHeight = 0 ; iFrameHeight < nBufferHeight; iFrameHeight++ ) fwrite( pBuffer[ 0 ] + iFrameHeight * nStride[ 0 ], 1, nBufferWidth, pFp_Scaler );
 
@@ -318,7 +366,7 @@ QRETURN on_process_video_preview( PVOID pDevice, double dSampleTime, BYTE* pFram
 
             fclose( pFp_Scaler );
 
-            printf("[QCAP DEBUG] Try storage GBRP to: %s\n", szRecord_Path.toUtf8().data() );
+            printf("[QCAP DEBUG] Try storage GBRP to: %s\n", qszRecord_Path.toUtf8().data() );
 
             ////// RAW DATA //////
 
@@ -400,10 +448,10 @@ MainWindow::MainWindow(QWidget *parent) :
 
     Func_OutputFolder_Check( m_qszOutputPath );
 
-    m_infer = new processinference(ui->Frame_CropBMP, m_qszOutputPath);
+    m_infer = new processinference(ui->Frame_Infer, m_qszOutputPath, INFER_FRAME_WIDTH, INFER_FRAME_HEIGHT);
 
 
-    ////// Auto Detect Disk Usage ( Per 2 Sec Snapshot )
+    ////// Auto Detect Disk Usage ( Per 2 Sec Check )
 
     m_qtStorage = QStorageInfo( QDir( QCoreApplication::applicationFilePath() ) );
 
@@ -421,16 +469,15 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ////// Set QFrame Aspect Ratio
 
-    ui->Frame_CropBMP->setAspectRatio( 508.0 / 556.0 );
+    ui->Frame_Live->setAspectRatio( LIVE_FRAME_WIDTH * 1.0 / LIVE_FRAME_HEIGHT );
 
-    ui->Frame_Live->setAspectRatio( 1324.0 / 1025.0 );
-
+    ui->Frame_Infer->setAspectRatio( INFER_FRAME_WIDTH * 1.0 / INFER_FRAME_HEIGHT );
 
     ////// Output Folder Bmp File
 
     BmpFinder * loader = new BmpFinder( m_qszOutputPath, BMP_SCAN_INTERVAL, this );
 
-    connect( loader, &BmpFinder::Signal_Bmp_LatestFound, this, &MainWindow::Func_Output_BmpUpdate );
+    connect( loader, &BmpFinder::Signal_Bmp_LatestFound, this, &MainWindow::Func_OutputBmp_Update );
 
 
     this->resize(1920, 1080);
@@ -458,11 +505,19 @@ MainWindow::MainWindow(QWidget *parent) :
 
     HwInitialize();
 
-    Func_Live_Scaler_Init( m_stFunc_Device.st_oFreeStack, 0, 0, LIVE_WIDTH, LIVE_HEIGHT, &m_stFunc_Device.st_pScaler_Live );
+    Func_Live_Scaler_Init( m_stFunc_Device.st_oFreeStack, 0, 0, SOURCE_WIDTH, SOURCE_HEIGHT, &m_stFunc_Device.st_pScaler_Live );
 
-    Func_Live_Sink_Init( m_stFunc_Device.st_oFreeStack, QCAP_COLORSPACE_TYPE_I420, LIVE_WIDTH, LIVE_HEIGHT, ui->Frame_Live, &m_stFunc_Device.st_pSink_Live );
+    Func_Live_Sink_Init( m_stFunc_Device.st_oFreeStack, QCAP_COLORSPACE_TYPE_I420, SOURCE_WIDTH, SOURCE_HEIGHT, ui->Frame_Live, &m_stFunc_Device.st_pSink_Live );
 
-    Func_Crop_Scaler_Init( m_stFunc_Device.st_oFreeStack, 0, 0, CROP_WIDTH, CROP_HEIGHT, &m_stFunc_Device.st_pScaler_Crop );
+    ULONG nCropX = 0;
+
+    if( ( SOURCE_WIDTH - LIVE_FRAME_WIDTH ) / 2 > 0 ) nCropX = ( SOURCE_WIDTH - LIVE_FRAME_WIDTH ) / 2;
+
+    ULONG nCropY = 0;
+
+    if( ( SOURCE_HEIGHT - LIVE_FRAME_HEIGHT ) / 2 > 0 ) nCropY = ( SOURCE_HEIGHT - LIVE_FRAME_HEIGHT ) / 2;
+
+    Func_Crop_Scaler_Init( m_stFunc_Device.st_oFreeStack, nCropX, nCropY, LIVE_FRAME_WIDTH, LIVE_FRAME_HEIGHT, &m_stFunc_Device.st_pScaler_Crop );
 
 }
 
@@ -691,6 +746,8 @@ void MainWindow::on_btn_changepassword_clicked()
 void MainWindow::Func_DiskUsage_Update()
 {
 
+    double dTriggerPercentage = 90.0;
+
     m_qtStorage.refresh();
 
     qint64 total = m_qtStorage.bytesTotal();
@@ -709,24 +766,32 @@ void MainWindow::Func_DiskUsage_Update()
 
     ui->ProgressBar_DiskUsage->setValue( ( int )dUsedPercent );
 
-    if( dUsedPercent >= 95 ) {
+    if( dUsedPercent >= dTriggerPercentage ) {
 
         ui->ProgressBar_DiskUsage->setStyleSheet( "QProgressBar::chunk {background-color: red;} QProgressBar{text-align: center;}" );
 
-        printf( "[QCAP DEBUG] Disk usage exceeds 95%. Local storage saving shall continue, overwriting oldest data using FIFO buffer\n" );
-
         ui->Label_DiskInfo->setText( "Local storage saving shall continue, overwriting oldest data using FIFO buffer" );
+
+        if( m_stFunc_Device.st_bDiskOverwrite == FALSE ) {
+
+            printf( "[QCAP DEBUG] Disk usage exceeds %d%. Local storage saving shall continue, Overwriting oldest data using FIFO Mode\n", ( UINT )dTriggerPercentage );
+
+        }
+
+        m_stFunc_Device.st_bDiskOverwrite = TRUE;
 
     } else {
 
         ui->ProgressBar_DiskUsage->setStyleSheet( "" );
+
+        m_stFunc_Device.st_bDiskOverwrite = FALSE;
 
     }
 
 }
 
 
-void MainWindow::Func_Output_BmpUpdate( const QString &path )
+void MainWindow::Func_OutputBmp_Update( const QString &path )
 {
 
     printf( "[QCAP DEBUG] New bmp file found: %s\n", path.toUtf8().data() );
@@ -825,7 +890,7 @@ QRESULT MainWindow::Func_Live_Sink_Init( free_stack_t& _FreeStack_, ULONG nColor
                     qcap2_video_format_new(), qcap2_video_format_delete);
 
         qcap2_video_format_set_property(pVideoFormat.get(),
-                                        nColorSpaceType, nVideoFrameWidth, nVideoFrameHeight, FALSE, 60);
+                                        nColorSpaceType, nVideoFrameWidth, nVideoFrameHeight, FALSE, 30);
 
         qcap2_video_sink_set_video_format(pVsink, pVideoFormat.get());
     }
@@ -929,4 +994,3 @@ void MainWindow::on_BTN_StorgeCropData_clicked()
     m_stFunc_Device.st_bStorageCropRaw = TRUE;
 
 }
-
